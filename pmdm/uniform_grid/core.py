@@ -4,7 +4,7 @@ import csr
 from scipy.sparse import csr_array
 from concurrent.futures import as_completed
 
-from dimensional_utils import (
+from .dimensional_utils import (
     extract_slice,
     periodic_inner_sum,
     generate_uniform_grid,

@@ -1,4 +1,4 @@
-from pmdm import mapped_distance_matrix
+from pmdm.uniform_grid.core import mapped_distance_matrix
 import numpy as np
 import numba as nb
 from concurrent.futures import ThreadPoolExecutor, Executor, Future
