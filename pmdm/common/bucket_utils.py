@@ -7,7 +7,7 @@ def compute_pts_bin_coords(pts, bin_physical_size):
     return np.floor_divide(pts, bin_physical_size).astype(int)
 
 
-def compute_sort_idxes(pts_bin_coords, bins_per_axis):
+def compute_sort_idxes(pts_bin_coords, bins_per_axis, cut_zeros=True):
     assert bins_per_axis.ndim == 1
     assert pts_bin_coords.shape[1] == len(bins_per_axis)
 
@@ -16,4 +16,26 @@ def compute_sort_idxes(pts_bin_coords, bins_per_axis):
     )
 
     counts = np.bincount(linearized_bin_coords)
-    return np.argsort(linearized_bin_coords), counts[counts > 0]
+    if cut_zeros:
+        counts = counts[counts > 0]
+    return np.argsort(linearized_bin_coords), counts
+
+
+def group_buckets(pts, weights, bins_per_axis, bin_physical_size):
+    pts_bin_coords = compute_pts_bin_coords(
+        pts=pts, bin_physical_size=bin_physical_size
+    )
+    sort_idxes, pts_count_per_bin = compute_sort_idxes(
+        pts_bin_coords=pts_bin_coords,
+        bins_per_axis=bins_per_axis,
+    )
+    pts[:] = pts[sort_idxes]
+
+    if weights is not None:
+        weights[:] = weights[sort_idxes]
+
+    first_bin_members = np.concatenate(
+        ([0], np.cumsum(pts_count_per_bin)[:-1])
+    )
+    indexing = sort_idxes[first_bin_members]
+    return pts_bin_coords[indexing], pts_count_per_bin
