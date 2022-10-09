@@ -1,11 +1,11 @@
+from concurrent.futures import as_completed
+
 import numpy as np
 import numba as nb
 import csr
 from scipy.sparse import csr_array
-from concurrent.futures import as_completed
 
 from .dimensional_utils import (
-    extract_slice,
     periodic_inner_sum,
     generate_uniform_grid,
     group_by,
@@ -28,36 +28,6 @@ def extract_subproblems(indexes, n_per_subgroup):
         return map(lambda arr: (np.array(arr),), indexes)
 
 
-def worker(
-    bin_content,
-    pts,
-    bins_coords,
-    weights,
-    uniform_grid_cell_step,
-    bins_size,
-    max_distance,
-    max_distance_in_cells,
-    function,
-    reference_bin,
-    exact_max_distance,
-    global_matrix_shape,
-):
-    return compute_mapped_distance_on_subgroup(
-        subgroup_content=pts[bin_content],
-        bin_coords=bins_coords[bin_content[0]],
-        nup_idxes=bin_content,
-        weights=weights[bin_content],
-        uniform_grid_cell_step=uniform_grid_cell_step,
-        bins_size=bins_size,
-        max_distance=max_distance,
-        max_distance_in_cells=max_distance_in_cells,
-        function=function,
-        reference_bin=reference_bin,
-        exact_max_distance=exact_max_distance,
-        global_matrix_shape=global_matrix_shape,
-    ).to_scipy()
-
-
 def distribute_and_start_subproblems(
     uniform_grid_cell_step,
     uniform_grid_size,
@@ -67,7 +37,6 @@ def distribute_and_start_subproblems(
     pts_per_future,
     executor,
     max_distance,
-    max_distance_in_cells,
     function,
     reference_bin,
     exact_max_distance,
@@ -111,7 +80,6 @@ def distribute_and_start_subproblems(
             uniform_grid_cell_step,
             bins_size,
             max_distance,
-            max_distance_in_cells,
             function,
             reference_bin,
             exact_max_distance,
@@ -122,107 +90,115 @@ def distribute_and_start_subproblems(
     )
 
 
-@nb.generated_jit(nopython=True, nogil=True)
-def compute_mapped_distance_on_subgroup(
-    subgroup_content,
-    bin_coords,
-    nup_idxes,
+def worker(
+    bin_content,
+    pts,
+    bins_coords,
     weights,
     uniform_grid_cell_step,
     bins_size,
     max_distance,
-    max_distance_in_cells,
     function,
     reference_bin,
     exact_max_distance,
     global_matrix_shape,
 ):
-    if exact_max_distance:
-        return compute_mapped_distance_on_subgroup_exact_distance
-    else:
-        return compute_mapped_distance_on_subgroup_nexact_distance
+    bin_coords = bins_coords[bin_content[0]]
+    # location of the lower left point of the non-padded bin in terms
+    # of uniform grid cells
+    bin_virtual_lower_left = bin_coords * bins_size
+    distances = compute_distances(
+        pts=pts[bin_content],
+        grid=reference_bin,
+        offset=bin_virtual_lower_left * uniform_grid_cell_step,
+    )
+    return compute_mapped_distance_on_subgroup(
+        distances=distances,
+        weights=weights[bin_content],
+        bin_virtual_lower_left=bin_virtual_lower_left,
+        max_distance=max_distance,
+        function=function,
+        global_matrix_shape=global_matrix_shape,
+        exact_max_distance=exact_max_distance,
+    ).to_scipy()
 
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
 def compute_distances(
-    subgroup_content,
-    reference_bin,
-    bin_coords,
-    bins_size,
-    uniform_grid_cell_step,
+    pts,
+    grid,
+    offset,
 ):
-    # location of the lower left point of the non-padded bin in terms
-    # of uniform grid cells
-    bin_virtual_lower_left = bin_coords * bins_size
-    # location of the upper right point of the non-padded bin
-    bin_virtual_upper_right = bin_virtual_lower_left + bins_size - 1
-
     # translate the subgroup in order to locate it nearby the reference bin
     # (reminder: the lower left point of the (non-padded) reference bin is
     # [0,0]).
-    subgroup_content -= bin_virtual_lower_left * uniform_grid_cell_step
+    pts -= offset
 
-    x_grid, y_grid, cmponents = reference_bin.shape
-    x_strides, y_strides, cmponents_strides = reference_bin.strides
-    _reference_bin = np.lib.stride_tricks.as_strided(
-        reference_bin,
+    x_grid, y_grid, cmponents = grid.shape
+    x_strides, y_strides, cmponents_strides = grid.strides
+    _grid = np.lib.stride_tricks.as_strided(
+        grid,
         shape=(x_grid, y_grid, 1, cmponents),
         strides=(x_strides, y_strides, 0, cmponents_strides),
     )
-    _subgroup = np.lib.stride_tricks.as_strided(
-        subgroup_content,
-        shape=(1, 1, *subgroup_content.shape),
-        strides=(0, 0, *subgroup_content.strides),
+    _pts = np.lib.stride_tricks.as_strided(
+        pts,
+        shape=(1, 1, *pts.shape),
+        strides=(0, 0, *pts.strides),
     )
 
-    return np.sqrt(np.sum(np.power(_reference_bin - _subgroup, 2), axis=3))
+    return np.sqrt(np.sum(np.power(_grid - _pts, 2), axis=3))
+
+
+@nb.generated_jit(nopython=True, nogil=True)
+def compute_mapped_distance_on_subgroup(
+    distances,
+    weights,
+    bin_virtual_lower_left,
+    max_distance,
+    function,
+    global_matrix_shape,
+    exact_max_distance,
+):
+    if exact_max_distance:
+        return compute_mapped_distance_on_subgroup_exact_distance
+    return compute_mapped_distance_on_subgroup_nexact_distance
 
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
 def compute_mapped_distance_on_subgroup_nexact_distance(
-    subgroup_content,
-    bin_coords,
-    nup_idxes,
+    distances,
     weights,
-    uniform_grid_cell_step,
-    bins_size,
-    max_distance,
-    max_distance_in_cells,
+    bin_virtual_lower_left,
+    max_distance,  # unused
     function,
-    reference_bin,
-    exact_max_distance,
     global_matrix_shape,
+    exact_max_distance,  # unused
 ):
-    distances = compute_distances(
-        subgroup_content,
-        reference_bin,
-        bin_coords,
-        bins_size,
-        uniform_grid_cell_step,
-    )
-    mapped_distance = np.zeros_like(distances[:, :, 0])
-    L, M, N = distances.shape
+    mapped_distance = np.zeros_like(distances[..., 0])
+    nrows, ncols, nnupt = distances.shape
 
-    data_size = L * M
+    data_size = nrows * ncols
     rowptrs = np.zeros(global_matrix_shape[0] + 1, dtype=np.int_)
     colinds = np.empty(data_size, dtype=np.int_)
     data = np.empty(data_size, dtype=distances.dtype)
 
-    bin_virtual_lower_left = bin_coords * bins_size
     rows_start = bin_virtual_lower_left[0]
     cols_start = bin_virtual_lower_left[1]
 
-    for i in range(L):
-        offset = i * M
-        rowptrs[rows_start + i + 1] = rowptrs[rows_start + i] + M
-        for j in range(M):
+    for i in range(nrows):
+        offset = i * ncols
+        for j in range(ncols):
             colinds[offset + j] = j + cols_start
             mapped_distance = 0
+
             dst = distances[i, j]
-            for k in range(N):
+            for k in range(nnupt):
                 mapped_distance += function(dst[k]) * weights[k]
             data[offset + j] = mapped_distance
-    rowptrs[rows_start + L + 1 :] = rowptrs[rows_start + L]
+
+        rowptrs[rows_start + i + 1] = rowptrs[rows_start + i] + ncols
+    rowptrs[rows_start + nrows + 1 :] = rowptrs[rows_start + nrows]
 
     return csr.create(
         global_matrix_shape[0],
@@ -236,50 +212,39 @@ def compute_mapped_distance_on_subgroup_nexact_distance(
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
 def compute_mapped_distance_on_subgroup_exact_distance(
-    subgroup_content,
-    bin_coords,
-    nup_idxes,
+    distances,
     weights,
-    uniform_grid_cell_step,
-    bins_size,
+    bin_virtual_lower_left,
     max_distance,
-    max_distance_in_cells,
     function,
-    reference_bin,
-    exact_max_distance,
     global_matrix_shape,
+    exact_max_distance,  # unused
 ):
-    distances = compute_distances(
-        subgroup_content,
-        reference_bin,
-        bin_coords,
-        bins_size,
-        uniform_grid_cell_step,
-    )
-    mapped_distance = np.zeros_like(distances[:, :, 0])
-    L, M, N = distances.shape
+    mapped_distance = np.zeros_like(distances[..., 0])
+    nrows, ncols, nnupt = distances.shape
 
-    data_size = L * M
+    data_size = nrows * ncols
     rowptrs = np.zeros(global_matrix_shape[0] + 1, dtype=np.int_)
     colinds = np.empty(data_size, dtype=np.int_)
     data = np.empty(data_size, dtype=distances.dtype)
 
-    bin_virtual_lower_left = bin_coords * bins_size
     rows_start = bin_virtual_lower_left[0]
     cols_start = bin_virtual_lower_left[1]
 
-    for i in range(L):
-        offset = i * M
-        rowptrs[rows_start + i + 1] = rowptrs[rows_start + i] + M
-        for j in range(M):
+    for i in range(nrows):
+        offset = i * ncols
+        for j in range(ncols):
             colinds[offset + j] = j + cols_start
             mapped_distance = 0
+
             dst = distances[i, j]
-            for k in range(N):
+            for k in range(nnupt):
                 if dst[k] < max_distance:
                     mapped_distance += function(dst[k]) * weights[k]
             data[offset + j] = mapped_distance
-    rowptrs[rows_start + L + 1 :] = rowptrs[rows_start + L]
+
+        rowptrs[rows_start + i + 1] = rowptrs[rows_start + i] + ncols
+    rowptrs[rows_start + nrows + 1 :] = rowptrs[rows_start + nrows]
 
     return csr.create(
         global_matrix_shape[0],
@@ -300,7 +265,7 @@ def mapped_distance_matrix(
     func,
     executor,
     weights=None,
-    exact_max_distance=False,
+    exact_max_distance=True,
     pts_per_future=-1,
     cell_reference_point_offset=0,
 ):
@@ -338,7 +303,6 @@ def mapped_distance_matrix(
         executor=executor,
         weights=weights,
         max_distance=max_distance,
-        max_distance_in_cells=max_distance_in_cells,
         reference_bin=reference_bin,
         function=func,
         exact_max_distance=exact_max_distance,
