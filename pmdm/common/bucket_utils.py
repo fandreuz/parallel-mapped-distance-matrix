@@ -40,12 +40,15 @@ def group_by(a):
     return np.split(a[:, 1], np.unique(a[:, 0], return_index=True)[1][1:])
 
 
-def pts_indexes_per_bucket(pts, bin_physical_size, bins_per_axis):
-    assert bins_per_axis.ndim == bin_physical_size.ndim == 1
-    assert pts.shape[1] == len(bins_per_axis) == len(bin_physical_size)
+def compute_pts_bin_coords(pts, bin_physical_size):
+    assert bin_physical_size.ndim == 1
+    assert pts.shape[1] == len(bin_physical_size)
+    return np.floor_divide(pts, bin_physical_size).astype(int)
 
-    pts_bin_coords = np.floor_divide(pts, bin_physical_size).astype(int)
 
+def pts_indexes_per_bucket(pts_bin_coords, bins_per_axis):
+    assert bins_per_axis.ndim == 1
+    assert pts_bin_coords.shape[1] == len(bins_per_axis)
     # transform the N-Dimensional bins indexing (N is the number of axes)
     # into a linear one (only one index)
     linearized_bin_coords = np.ravel_multi_index(
@@ -55,6 +58,6 @@ def pts_indexes_per_bucket(pts, bin_physical_size, bins_per_axis):
     # group by, in order to have an index that we can use to access the
     # pts array
     aug_linearized_bin_coords = np.stack(
-        (linearized_bin_coords, np.arange(len(pts))), axis=-1
+        (linearized_bin_coords, np.arange(len(pts_bin_coords))), axis=-1
     )
-    return group_by(aug_linearized_bin_coords), pts_bin_coords
+    return group_by(aug_linearized_bin_coords)

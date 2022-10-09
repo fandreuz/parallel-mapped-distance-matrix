@@ -5,7 +5,10 @@ import numba as nb
 import csr
 from scipy.sparse import csr_array
 
-from pmdm.common.bucket_utils import pts_indexes_per_bucket
+from pmdm.common.bucket_utils import (
+    pts_indexes_per_bucket,
+    compute_pts_bin_coords,
+)
 from pmdm.common.uniform_grid import UniformGrid
 from pmdm.common.dimensional_utils import periodic_inner_sum
 
@@ -13,16 +16,12 @@ from pmdm.common.dimensional_utils import periodic_inner_sum
 def extract_subproblems(indexes, n_per_subgroup):
     if n_per_subgroup != -1:
         return map(
-            # here we apply the finer granularity (#pts per future)
             lambda arr: np.array_split(
                 arr, np.ceil(len(arr) / n_per_subgroup)
             ),
             indexes,
         )
     else:
-        # we transform the lists of indexes in indexes_inside_bins to NumPy
-        # arrays. we also wrap them into 1-element tuples because of how we
-        # treat them in client.map
         return map(lambda arr: (np.array(arr),), indexes)
 
 
@@ -46,9 +45,11 @@ def distribute_and_start_subproblems(
     pts = np.mod(pts, (uniform_grid_size * uniform_grid_cell_step)[None])
 
     bin_physical_size = uniform_grid_cell_step * bins_size
-    indexes_inside_buckets, pts_bin_coords = pts_indexes_per_bucket(
-        pts=pts,
-        bin_physical_size=bin_physical_size,
+    pts_bin_coords = compute_pts_bin_coords(
+        pts=pts, bin_physical_size=bin_physical_size
+    )
+    indexes_inside_buckets = pts_indexes_per_bucket(
+        pts_bin_coords=pts_bin_coords,
         bins_per_axis=bins_per_axis,
     )
 
