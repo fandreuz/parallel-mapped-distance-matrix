@@ -5,11 +5,9 @@ import numba as nb
 import csr
 from scipy.sparse import csr_array
 
-from .dimensional_utils import (
-    periodic_inner_sum,
-    generate_uniform_grid,
-    group_by,
-)
+from pmdm.common.bucket_utils import pts_indexes_per_bucket
+from pmdm.common.uniform_grid import UniformGrid
+from pmdm.common.dimensional_utils import periodic_inner_sum
 
 
 def extract_subproblems(indexes, n_per_subgroup):
@@ -47,26 +45,16 @@ def distribute_and_start_subproblems(
     # periodicity
     pts = np.mod(pts, (uniform_grid_size * uniform_grid_cell_step)[None])
 
-    pts_bin_coords = np.floor_divide(
-        pts, uniform_grid_cell_step * bins_size
-    ).astype(int)
-
-    # transform the N-Dimensional bins indexing (N is the number of axes)
-    # into a linear one (only one index)
-    linearized_bin_coords = np.ravel_multi_index(
-        pts_bin_coords.T, bins_per_axis
+    bin_physical_size = uniform_grid_cell_step * bins_size
+    indexes_inside_buckets, pts_bin_coords = pts_indexes_per_bucket(
+        pts=pts,
+        bin_physical_size=bin_physical_size,
+        bins_per_axis=bins_per_axis,
     )
-    # augment the linear indexing with the index of the point before using
-    # group by, in order to have an index that we can use to access the
-    # pts array
-    aug_linearized_bin_coords = np.stack(
-        (linearized_bin_coords, np.arange(len(pts))), axis=-1
-    )
-    indexes_inside_bins = group_by(aug_linearized_bin_coords)
 
     # we create subproblems for each bin (i.e. we split points in the
     # same bin in order to treat at most pts_per_future points in each Future)
-    subproblems = extract_subproblems(indexes_inside_bins, pts_per_future)
+    subproblems = extract_subproblems(indexes_inside_buckets, pts_per_future)
     # each subproblem is treated by a single Future. each bin spawns one or
     # more subproblems.
 
@@ -286,9 +274,12 @@ def mapped_distance_matrix(
     # (in each direction) the value of max_distance. the lower_left point is
     # set to max_distance because we want the (0,0) point to be the first
     # point inside the non-padded bin.
-    reference_bin = generate_uniform_grid(
-        uniform_grid_cell_step, bins_size + 2 * max_distance_in_cells
-    )
+    reference_bin = UniformGrid(
+        step=uniform_grid_cell_step,
+        size=bins_size + 2 * max_distance_in_cells,
+        lazy=False,
+    ).grid
+
     lower_left = -(max_distance_in_cells * uniform_grid_cell_step)
     reference_bin += lower_left + cell_reference_point_offset
 
