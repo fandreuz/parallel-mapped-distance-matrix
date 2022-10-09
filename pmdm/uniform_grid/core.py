@@ -6,23 +6,11 @@ import csr
 from scipy.sparse import csr_array
 
 from pmdm.common.bucket_utils import (
-    pts_indexes_per_bucket,
+    compute_sort_idxes,
     compute_pts_bin_coords,
 )
 from pmdm.common.uniform_grid import UniformGrid
 from pmdm.common.dimensional_utils import periodic_inner_sum
-
-
-def extract_subproblems(indexes, n_per_subgroup):
-    if n_per_subgroup != -1:
-        return map(
-            lambda arr: np.array_split(
-                arr, np.ceil(len(arr) / n_per_subgroup)
-            ),
-            indexes,
-        )
-    else:
-        return map(lambda arr: (np.array(arr),), indexes)
 
 
 def distribute_and_start_subproblems(
@@ -48,41 +36,48 @@ def distribute_and_start_subproblems(
     pts_bin_coords = compute_pts_bin_coords(
         pts=pts, bin_physical_size=bin_physical_size
     )
-    indexes_inside_buckets = pts_indexes_per_bucket(
+    sort_idxes, pts_count_per_bin = compute_sort_idxes(
         pts_bin_coords=pts_bin_coords,
         bins_per_axis=bins_per_axis,
     )
-
-    # we create subproblems for each bin (i.e. we split points in the
-    # same bin in order to treat at most pts_per_future points in each Future)
-    subproblems = extract_subproblems(indexes_inside_buckets, pts_per_future)
-    # each subproblem is treated by a single Future. each bin spawns one or
-    # more subproblems.
-
-    return (
-        executor.submit(
-            worker,
-            subgroup,
-            pts,
-            pts_bin_coords,
-            weights,
-            uniform_grid_cell_step,
-            bins_size,
-            max_distance,
-            function,
-            reference_bin,
-            exact_max_distance,
-            global_matrix_shape,
-        )
-        for bin_content in subproblems
-        for subgroup in bin_content
+    pts = pts[sort_idxes]
+    weights = weights[sort_idxes]
+    first_bin_members = np.concatenate(
+        ([0], np.cumsum(pts_count_per_bin)[:-1])
     )
+    indexing = sort_idxes[first_bin_members]
+    pts_bin_coords = pts_bin_coords[indexing]
+
+    start = lambda bin_idx, start, size: executor.submit(
+        worker,
+        pts[start : start + size],
+        pts_bin_coords[bin_idx],
+        weights[start : start + size],
+        uniform_grid_cell_step,
+        bins_size,
+        max_distance,
+        function,
+        reference_bin,
+        exact_max_distance,
+        global_matrix_shape,
+    )
+
+    curr_start = 0
+    futures = []
+    for bin_idx, count in enumerate(pts_count_per_bin):
+        while count > pts_per_future:
+            count -= pts_per_future
+            futures.append(start(bin_idx, curr_start, pts_per_future))
+            curr_start += pts_per_future
+        if count > 0:
+            futures.append(start(bin_idx, curr_start, count))
+            curr_start += count
+    return futures
 
 
 def worker(
-    bin_content,
     pts,
-    bins_coords,
+    bin_coords,
     weights,
     uniform_grid_cell_step,
     bins_size,
@@ -92,18 +87,17 @@ def worker(
     exact_max_distance,
     global_matrix_shape,
 ):
-    bin_coords = bins_coords[bin_content[0]]
     # location of the lower left point of the non-padded bin in terms
     # of uniform grid cells
     bin_virtual_lower_left = bin_coords * bins_size
     distances = compute_distances(
-        pts=pts[bin_content],
+        pts=pts,
         grid=reference_bin,
         offset=bin_virtual_lower_left * uniform_grid_cell_step,
     )
     return compute_mapped_distance_on_subgroup(
         distances=distances,
-        weights=weights[bin_content],
+        weights=weights,
         bin_virtual_lower_left=bin_virtual_lower_left,
         max_distance=max_distance,
         function=function,
@@ -255,7 +249,7 @@ def mapped_distance_matrix(
     executor,
     weights=None,
     exact_max_distance=True,
-    pts_per_future=-1,
+    pts_per_future=float("inf"),
     cell_reference_point_offset=0,
 ):
     if weights is None:
