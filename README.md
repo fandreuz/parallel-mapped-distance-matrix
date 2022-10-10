@@ -39,6 +39,23 @@ $$\tilde{\mathbf{M}}\_{i} := \sum\_{j} \mathbf{M}\_{i,j}$$
 
 For most use cases this is enough.
 
+## Roadmap
+- [x] Uniform grid algorithm
+- [x] Scattered points algorithm
+- [ ] Tests
+- [ ] Documentation
+- [ ] Be more general: no need to target only the distance, any scalar function
+  of two variables is fine;
+- [ ] PyTorch, JAX
+- [ ] Periodicity
+  - [ ] Uniform grid
+  - [ ] Scattered points
+- [ ] Benchmark (+comparison with competitors)
+  - [ ] CPU
+  - [ ] GPU
+  - [ ] Several different bin sizes
+  - [ ] `pts_per_future`
+
 ## Authors
 This repository is maintained by:
 - Francesco Andreuzzi (CERN, SISSA)
