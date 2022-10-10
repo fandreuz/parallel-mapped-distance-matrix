@@ -1,19 +1,11 @@
-from pmdm.uniform_grid.core import mapped_distance_matrix
 import numpy as np
 import numba as nb
-from concurrent.futures import ThreadPoolExecutor, Executor, Future
+from concurrent.futures import ThreadPoolExecutor, Future
+
+from pmdm.uniform_grid.core import mapped_distance_matrix
+from pmdm.common.test.test_common import FakeExecutor
 
 import pytest
-
-
-class FakeExecutor(Executor):
-    def submit(self, f, *args, **kwargs):
-        future = Future()
-        future.set_result(f(*args, **kwargs))
-        return future
-
-    def shutdown(self, wait=True):
-        pass
 
 
 @nb.njit
