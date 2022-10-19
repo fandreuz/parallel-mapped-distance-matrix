@@ -33,10 +33,9 @@ def group_buckets(pts, weights, bins_per_axis, bin_physical_size):
     first_bin_members = np.concatenate(
         ([0], np.cumsum(pts_count_per_bin)[:-1])
     )
-    indexing = sort_idxes[first_bin_members]
 
     pts[:] = pts[sort_idxes]
     if weights is not None:
         weights[:] = weights[sort_idxes]
 
-    return pts_bin_coords[indexing], pts_count_per_bin
+    return pts_bin_coords[sort_idxes[first_bin_members]], pts_count_per_bin
