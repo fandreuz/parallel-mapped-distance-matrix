@@ -123,3 +123,81 @@ def test_simple_reversed_bins_restrictive_distance(pool_init):
     expected[1] = np.sqrt(0.5) + np.sqrt(0.25)
 
     np.testing.assert_allclose(m, expected)
+
+
+@pytest.mark.parametrize("pool_init", thread_pool_initializers)
+def test_middle_complexity(pool_init):
+    pts1 = np.array([[0, 0], [1, 1], [2, 2], [3, 3]], dtype=float)
+    pts2 = np.array(
+        [[0.5, 0.5], [1, 0.5], [1, 1], [2, 2], [1.5, 1.5]], dtype=float
+    )
+
+    with pool_init() as executor:
+        m = mapped_distance_matrix(
+            pts1=pts1,
+            pts2=pts2,
+            uniform_grid_cell_step=np.array([0.2, 0.2]),
+            uniform_grid_size=np.array([16, 16]),
+            bins_size=np.array([2, 2]),
+            max_distance=2,
+            func=identity,
+            executor=executor,
+        )
+
+    expected = np.zeros(4)
+
+    expected[0] = np.sqrt(0.5) + np.sqrt(1.25) + np.sqrt(2)
+    expected[1] = np.sqrt(0.5) + np.sqrt(0.25) + np.sqrt(2) + np.sqrt(0.5)
+    expected[2] = np.sqrt(1 + 1.5**2) + np.sqrt(2) + np.sqrt(0.5)
+    expected[3] = np.sqrt(2)
+
+    np.testing.assert_allclose(m, expected)
+
+
+@pytest.mark.parametrize("pool_init", thread_pool_initializers)
+def test_exact_max_distance_true_boundary(pool_init):
+    pts1 = np.array([[0.0, 0.0]], dtype=float)
+    pts2 = np.array([[0.3, 0.0], [0.31, 0.0]], dtype=float)
+
+    with pool_init() as executor:
+        m = mapped_distance_matrix(
+            pts1=pts1,
+            pts2=pts2,
+            uniform_grid_cell_step=np.array([0.1, 0.1]),
+            uniform_grid_size=np.array([6, 6]),
+            bins_size=np.array([2, 2]),
+            max_distance=0.301,
+            func=identity,
+            executor=executor,
+        )
+
+    expected = np.zeros(1)
+
+    expected[0] = 0.3
+
+    np.testing.assert_allclose(m, expected)
+
+
+@pytest.mark.parametrize("pool_init", thread_pool_initializers)
+def test_exact_max_distance_false_boundary(pool_init):
+    pts1 = np.array([[0.0, 0.0]], dtype=float)
+    pts2 = np.array([[0.3, 0.0], [0.31, 0.0]], dtype=float)
+
+    with pool_init() as executor:
+        m = mapped_distance_matrix(
+            pts1=pts1,
+            pts2=pts2,
+            uniform_grid_cell_step=np.array([0.1, 0.1]),
+            uniform_grid_size=np.array([6, 6]),
+            bins_size=np.array([2, 2]),
+            max_distance=0.301,
+            exact_max_distance=False,
+            func=identity,
+            executor=executor,
+        )
+
+    expected = np.zeros(1)
+
+    expected[0] = 0.3 + 0.31
+
+    np.testing.assert_allclose(m, expected)
