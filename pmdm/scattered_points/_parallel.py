@@ -9,22 +9,18 @@ def worker(
     pts2_bin_coords,
     weights,
     max_distance,
-    max_distance_in_cells,
+    neighbors_shifts,
     bins_per_axis,
-    periodic,
+    periodic,  # TODO
     function,
     exact_max_distance,
     dtype,
 ):
-    if pts1.shape[1] == 2:
-        get_neighborhood = get_neighborhood_2d
-    elif pts1.shape[1] == 3:
-        get_neighborhood = get_neighborhood_3d
-    else:
-        raise RuntimeError("Not implemented yet")
-
     neighbor_bins = get_neighborhood(
-        pts2_bin_coords, max_distance_in_cells, bins_per_axis, periodic
+        pts2_bin_coords,
+        neighbors_shifts,
+        bins_per_axis,
+        len(pts1_count_per_bin),
     )
     pts1_starts = np.concatenate(([0], np.cumsum(pts1_count_per_bin[:-1])))
 
@@ -124,43 +120,16 @@ def compute_mapped_distance_exact_distance(
         curr_start += pts1_count_per_bin[bin_idx]
 
 
-def axis_neighborhood(coord, max_distance_in_cells, nbins, periodic):
-    x = np.arange(
-        coord - max_distance_in_cells, coord + max_distance_in_cells + 1
-    )
-    if periodic:
-        x = np.mod(x, nbins)
-    else:
-        x = np.clip(x, a_min=0, a_max=nbins - 1)
-    return np.unique(x)
-
-
-def get_neighborhood_2d(
-    bin_coords, max_distance_in_cells, bins_per_axis, periodic=True
-):
-    assert bin_coords.ndim == 1 and len(bin_coords) == 2
-    rows = axis_neighborhood(
-        bin_coords[0], max_distance_in_cells[0], bins_per_axis[0], periodic
-    )
-    cols = axis_neighborhood(
-        bin_coords[1], max_distance_in_cells[1], bins_per_axis[1], periodic
-    )
+def get_neighborhood_2d(bin_coords, neighs_shift, bins_per_axis):
+    rows = bin_coords[0] + neighs_shift[0]
+    cols = bin_coords[1] + neighs_shift[1]
     return np.unique((cols[None] + rows[:, None] * bins_per_axis[1]).flatten())
 
 
-def get_neighborhood_3d(
-    bin_coords, max_distance_in_cells, bins_per_axis, periodic=True
-):
-    assert bin_coords.ndim == 1 and len(bin_coords) == 3
-    rows = axis_neighborhood(
-        bin_coords[0], max_distance_in_cells[0], bins_per_axis[0], periodic
-    )
-    cols = axis_neighborhood(
-        bin_coords[1], max_distance_in_cells[1], bins_per_axis[1], periodic
-    )
-    depth = axis_neighborhood(
-        bin_coords[2], max_distance_in_cells[2], bins_per_axis[2], periodic
-    )
+def get_neighborhood_3d(bin_coords, neighs_shift, bins_per_axis):
+    rows = bin_coords[0] + neighs_shift[0]
+    cols = bin_coords[1] + neighs_shift[1]
+    depths = bin_coords[2] + neighs_shift[2]
     return np.unique(
         (
             depth[None]
@@ -168,3 +137,21 @@ def get_neighborhood_3d(
             + rows[:, :, None] * bins_per_axis[1] * bins_per_axis[2]
         ).flatten()
     )
+
+
+def get_neighborhood(bin_coords, neighs_shift, bins_per_axis, nbins):
+    ndims = len(bin_coords)
+    if ndims == 2:
+        neighborhood = get_neighborhood_2d(
+            bin_coords, neighs_shift, bins_per_axis
+        )
+    elif ndims == 3:
+        neighborhood = get_neighborhood_3d(
+            bin_coords, neighs_shift, bins_per_axis
+        )
+    else:
+        raise RuntimeError("Not implemented yet")
+
+    # TODO periodicity
+
+    return np.clip(neighborhood, a_min=0, a_max=nbins - 1)

@@ -8,6 +8,10 @@ from pmdm.common.parallel import distribute_and_start_subproblems
 from pmdm.scattered_points._parallel import worker
 
 
+def compute_neighborhood_shifts(max_distance_in_cells):
+    return np.arange(-max_distance_in_cells, max_distance_in_cells + 1)
+
+
 def mapped_distance_matrix(
     pts1,
     pts2,
@@ -39,6 +43,11 @@ def mapped_distance_matrix(
     max_distance_in_cells = np.ceil(
         max_distance / uniform_grid_cell_step
     ).astype(int)
+    neighs_shifts = [
+        np.unique(compute_neighborhood_shifts(cells))
+        for cells in max_distance_in_cells
+    ]
+
     trigger = lambda bin_idx, start, size: executor.submit(
         worker,
         pts1,
@@ -47,7 +56,7 @@ def mapped_distance_matrix(
         pts2_bin_coords[bin_idx],
         weights[start : start + size],
         max_distance,
-        max_distance_in_cells,
+        neighs_shifts,
         bins_per_axis,
         periodic,
         func,
