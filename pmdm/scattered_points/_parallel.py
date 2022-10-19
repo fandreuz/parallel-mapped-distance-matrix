@@ -27,38 +27,32 @@ def worker(
     pts1_n = np.sum(pts1_count_per_bin[neighbor_bins])
     aggregated_weighted = np.empty(pts1_n, dtype=dtype)
 
-    compute_mapped_distance(
-        pts1=pts1,
-        pts1_starts=pts1_starts,
-        pts1_count_per_bin=pts1_count_per_bin,
-        pts1_bin_idxes=neighbor_bins,
-        pts2=pts2,
-        weights=weights,
-        max_distance=max_distance,
-        function=function,
-        exact_max_distance=exact_max_distance,
-        out=aggregated_weighted,
-    )
+    if exact_max_distance:
+        compute_mapped_distance_exact_distance(
+            pts1=pts1,
+            pts1_starts=pts1_starts,
+            pts1_count_per_bin=pts1_count_per_bin,
+            pts1_bin_idxes=neighbor_bins,
+            pts2=pts2,
+            weights=weights,
+            max_distance=max_distance,
+            function=function,
+            out=aggregated_weighted,
+        )
+    else:
+        compute_mapped_distance_nexact_distance(
+            pts1=pts1,
+            pts1_starts=pts1_starts,
+            pts1_count_per_bin=pts1_count_per_bin,
+            pts1_bin_idxes=neighbor_bins,
+            pts2=pts2,
+            weights=weights,
+            max_distance=max_distance,
+            function=function,
+            out=aggregated_weighted,
+        )
 
     return aggregated_weighted, neighbor_bins
-
-
-@nb.generated_jit(nopython=True, nogil=True)
-def compute_mapped_distance(
-    pts1,
-    pts1_starts,
-    pts1_count_per_bin,
-    pts1_bin_idxes,
-    pts2,
-    weights,
-    max_distance,
-    function,
-    exact_max_distance,
-    out,
-):
-    if exact_max_distance:
-        return compute_mapped_distance_exact_distance
-    return compute_mapped_distance_nexact_distance
 
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
@@ -71,7 +65,6 @@ def compute_mapped_distance_nexact_distance(
     weights,
     max_distance,
     function,
-    exact_max_distance,
     out,
 ):
     pts2_n = len(pts2)
@@ -100,7 +93,6 @@ def compute_mapped_distance_exact_distance(
     weights,
     max_distance,
     function,
-    exact_max_distance,
     out,
 ):
     pts2_n = len(pts2)

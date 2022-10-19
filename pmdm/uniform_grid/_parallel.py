@@ -23,15 +23,24 @@ def worker(
         grid=reference_bin,
         offset=bin_virtual_lower_left * uniform_grid_cell_step,
     )
-    return compute_mapped_distance_on_subgroup(
-        distances=distances,
-        weights=weights,
-        bin_virtual_lower_left=bin_virtual_lower_left,
-        max_distance=max_distance,
-        function=function,
-        global_matrix_shape=global_matrix_shape,
-        exact_max_distance=exact_max_distance,
-    ).to_scipy()
+
+    if exact_max_distance:
+        return compute_mapped_distance_on_subgroup_exact_distance(
+            distances=distances,
+            weights=weights,
+            bin_virtual_lower_left=bin_virtual_lower_left,
+            max_distance=max_distance,
+            function=function,
+            global_matrix_shape=global_matrix_shape,
+        ).to_scipy()
+    else:
+        return compute_mapped_distance_on_subgroup_nexact_distance(
+            distances=distances,
+            weights=weights,
+            bin_virtual_lower_left=bin_virtual_lower_left,
+            function=function,
+            global_matrix_shape=global_matrix_shape,
+        ).to_scipy()
 
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
@@ -61,30 +70,13 @@ def compute_distances(
     return np.sqrt(np.sum(np.power(_grid - _pts, 2), axis=3))
 
 
-@nb.generated_jit(nopython=True, nogil=True)
-def compute_mapped_distance_on_subgroup(
-    distances,
-    weights,
-    bin_virtual_lower_left,
-    max_distance,
-    function,
-    global_matrix_shape,
-    exact_max_distance,
-):
-    if exact_max_distance:
-        return compute_mapped_distance_on_subgroup_exact_distance
-    return compute_mapped_distance_on_subgroup_nexact_distance
-
-
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
 def compute_mapped_distance_on_subgroup_nexact_distance(
     distances,
     weights,
     bin_virtual_lower_left,
-    max_distance,  # unused
     function,
     global_matrix_shape,
-    exact_max_distance,  # unused
 ):
     mapped_distance = np.zeros_like(distances[..., 0])
     nrows, ncols, nnupt = distances.shape
@@ -129,7 +121,6 @@ def compute_mapped_distance_on_subgroup_exact_distance(
     max_distance,
     function,
     global_matrix_shape,
-    exact_max_distance,  # unused
 ):
     mapped_distance = np.zeros_like(distances[..., 0])
     nrows, ncols, nnupt = distances.shape
