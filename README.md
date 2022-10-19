@@ -40,21 +40,29 @@ $$\tilde{\mathbf{M}}\_{i} := \sum\_{j} \mathbf{M}\_{i,j}$$
 For most use cases this is enough.
 
 ## Roadmap
-- [x] Uniform grid algorithm
-- [x] Scattered points algorithm
+- Algorithms
+  - [x] Uniform grid algorithm
+  - [x] Scattered points algorithm
+  - [ ] Fourier-transfor based algorithm
+- [ ] Backends
+  - [ ] NumPy/Numba
+  - [ ] PyTorch
+  - [ ] JAX(?)
+- [ ] Parallelization
+  - [x] Multithreading/Multiprocessing
+  - [ ] GPU w/ PyTorch
+  - [ ] GPU w/ JAX
+  - [ ] CUDA kernels(?)
 - [ ] Tests
 - [ ] Documentation
-- [ ] Be more general: no need to target only the distance, any scalar function
-  of two variables is fine;
-- [ ] PyTorch, JAX
-- [ ] Periodicity
-  - [ ] Uniform grid
-  - [ ] Scattered points
 - [ ] Benchmark (+comparison with competitors)
   - [ ] CPU
   - [ ] GPU
   - [ ] Several different bin sizes
   - [ ] `pts_per_future`
+- [ ] Future
+  - [ ] Periodicity
+  - [ ] More general about distance definitions
 
 ## Authors
 This repository is maintained by:
