@@ -4,7 +4,7 @@ import numpy as np
 from scipy.sparse import csr_array
 
 from pmdm.common.bucket_utils import group_buckets
-from pmdm.common.dimensional_utils import periodic_inner_sum
+from pmdm.common.dimensional_utils import periodic_inner_sum, extract_slice
 from pmdm.common.parallel import distribute_and_start_subproblems
 from pmdm.uniform_grid._parallel import worker
 
@@ -33,6 +33,7 @@ def mapped_distance_matrix(
     exact_max_distance=True,
     pts_per_future=float("inf"),
     cell_reference_point_offset=0,
+    periodic=True,
 ):
     if weights is None:
         weights = np.ones(len(non_uniform_points), dtype=int)
@@ -47,10 +48,11 @@ def mapped_distance_matrix(
         max_distance / uniform_grid_cell_step
     ).astype(int)
 
-    # periodicity
-    non_uniform_points = np.mod(
-        non_uniform_points, (uniform_grid_size * uniform_grid_cell_step)[None]
-    )
+    if periodic:
+        non_uniform_points = np.mod(
+            non_uniform_points,
+            (uniform_grid_size * uniform_grid_cell_step)[None],
+        )
 
     bins_per_axis = uniform_grid_size // bins_size
     bin_physical_size = uniform_grid_cell_step * bins_size
@@ -90,9 +92,15 @@ def mapped_distance_matrix(
     mapped_distance = csr_array(shape, dtype=dtype)
     for completed in as_completed(futures):
         mapped_distance += completed.result()
+    mapped_distance = mapped_distance.todense()
 
-    return periodic_inner_sum(
-        mapped_distance.todense(),
-        max_distance_in_cells,
-        uniform_grid_size + max_distance_in_cells,
-    )
+    if periodic:
+        return periodic_inner_sum(
+            mapped_distance,
+            max_distance_in_cells,
+            uniform_grid_size + max_distance_in_cells,
+        )
+    else:
+        return extract_slice(
+            mapped_distance, max_distance_in_cells, -max_distance_in_cells
+        )
