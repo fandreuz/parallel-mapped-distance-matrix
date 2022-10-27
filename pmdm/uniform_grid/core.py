@@ -49,9 +49,10 @@ def mapped_distance_matrix(
     ).astype(int)
 
     if periodic:
-        non_uniform_points = np.mod(
+        np.mod(
             non_uniform_points,
             (uniform_grid_size * uniform_grid_cell_step)[None],
+            out=non_uniform_points
         )
 
     bins_per_axis = uniform_grid_size // bins_size

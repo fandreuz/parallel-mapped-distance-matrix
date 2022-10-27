@@ -77,5 +77,4 @@ def mapped_distance_matrix(
         pts1_result, idxes = completed.result()
         result[idxes] += pts1_result
 
-    print(np.hstack((np.arange(len(pts1))[:,None], pts1[invert_idxes])))
     return result[invert_idxes]
