@@ -33,13 +33,14 @@ def mapped_distance_matrix(
 
     bins_per_axis = uniform_grid_size // bins_size
     bin_physical_size = uniform_grid_cell_step * bins_size
-    _, pts1_count_per_bin = group_buckets(
-        pts1, None, bins_per_axis, bin_physical_size
+    _, pts1_count_per_bin, invert_idxes = group_buckets(
+        pts1, None, bins_per_axis, bin_physical_size, return_inverse_sort=True
     )
     pts2_bin_coords, pts2_count_per_bin = group_buckets(
         pts2, weights, bins_per_axis, bin_physical_size
     )
 
+    pts1_starts = np.concatenate(([0], np.cumsum(pts1_count_per_bin[:-1])))
     max_distance_in_cells = np.ceil(
         max_distance / uniform_grid_cell_step
     ).astype(int)
@@ -52,6 +53,7 @@ def mapped_distance_matrix(
         worker,
         pts1,
         pts1_count_per_bin,
+        pts1_starts,
         pts2[start : start + size],
         pts2_bin_coords[bin_idx],
         weights[start : start + size],
@@ -75,4 +77,5 @@ def mapped_distance_matrix(
         pts1_result, idxes = completed.result()
         result[idxes] += pts1_result
 
-    return result
+    print(np.hstack((np.arange(len(pts1))[:,None], pts1[invert_idxes])))
+    return result[invert_idxes]

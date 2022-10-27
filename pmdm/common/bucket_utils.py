@@ -21,7 +21,9 @@ def compute_sort_idxes(pts_bin_coords, bins_per_axis, cut_zeros=True):
     return np.argsort(linearized_bin_coords), counts
 
 
-def group_buckets(pts, weights, bins_per_axis, bin_physical_size):
+def group_buckets(
+    pts, weights, bins_per_axis, bin_physical_size, return_inverse_sort=False
+):
     pts_bin_coords = compute_pts_bin_coords(
         pts=pts, bin_physical_size=bin_physical_size
     )
@@ -38,4 +40,14 @@ def group_buckets(pts, weights, bins_per_axis, bin_physical_size):
     if weights is not None:
         weights[:] = weights[sort_idxes]
 
-    return pts_bin_coords[sort_idxes[first_bin_members]], pts_count_per_bin
+    if return_inverse_sort:
+        npts = len(pts)
+        inverse_sort_idxes = np.empty(npts, dtype=int)
+        inverse_sort_idxes[sort_idxes] = np.arange(npts)
+        return (
+            pts_bin_coords[sort_idxes[first_bin_members]],
+            pts_count_per_bin,
+            inverse_sort_idxes,
+        )
+    else:
+        return pts_bin_coords[sort_idxes[first_bin_members]], pts_count_per_bin

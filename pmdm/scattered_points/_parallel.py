@@ -5,6 +5,7 @@ import numba as nb
 def worker(
     pts1,
     pts1_count_per_bin,
+    pts1_starts,
     pts2,
     pts2_bin_coords,
     weights,
@@ -22,8 +23,6 @@ def worker(
         bins_per_axis,
         len(pts1_count_per_bin),
     )
-    pts1_starts = np.concatenate(([0], np.cumsum(pts1_count_per_bin[:-1])))
-
     pts1_n = np.sum(pts1_count_per_bin[neighbor_bins])
     aggregated_weighted = np.empty(pts1_n, dtype=dtype)
 
@@ -52,7 +51,13 @@ def worker(
             out=aggregated_weighted,
         )
 
-    return aggregated_weighted, neighbor_bins
+    pts1_idxes = np.concatenate(
+        tuple(
+            np.arange(pts1_count_per_bin[b]) + pts1_starts[b]
+            for b in neighbor_bins
+        )
+    )
+    return aggregated_weighted, pts1_idxes
 
 
 @nb.jit(nopython=True, fastmath=True, cache=True, nogil=True)
@@ -146,4 +151,4 @@ def get_neighborhood(bin_coords, neighs_shift, bins_per_axis, nbins):
 
     # TODO periodicity
 
-    return np.clip(neighborhood, a_min=0, a_max=nbins - 1)
+    return np.unique(np.clip(neighborhood, a_min=0, a_max=nbins - 1))
