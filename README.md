@@ -63,7 +63,3 @@ For most use cases this is enough.
 - [ ] Future
   - [ ] Periodicity
   - [ ] More general about distance definitions
-
-## Authors
-This repository is maintained by:
-- Francesco Andreuzzi (CERN, SISSA)
